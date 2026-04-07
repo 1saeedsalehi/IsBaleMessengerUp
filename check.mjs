@@ -41,6 +41,8 @@ async function main() {
   let status;
   let statusText;
   try {
+    const msg = `✅ Test message!`;
+    await sendTelegram(msg);
     const res = await fetch(CHECK_URL, {
       method: "GET",
       redirect: "follow",
