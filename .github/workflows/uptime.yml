@@ -5,7 +5,7 @@ name: Bale uptime check
 
 on:
   schedule:
-    - cron: "7 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
