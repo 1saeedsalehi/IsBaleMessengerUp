@@ -1,7 +1,4 @@
-# Schedules only run from the DEFAULT branch (Settings → General → Default branch).
-# Fork: enable Actions on the fork (Actions tab). Public repo inactive 60d: re-enable the workflow.
-# Cron is UTC. Minute 7 past each hour avoids the worst top-of-hour queue congestion on GitHub.
-name: Bale uptime check
+name: Is Bale Up?
 
 on:
   schedule:
