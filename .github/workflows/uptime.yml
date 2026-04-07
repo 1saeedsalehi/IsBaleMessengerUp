@@ -21,7 +21,13 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Check URL and notify on success
+      # Persists last up/down between runs so we only Telegram on state change (less noise).
+      - uses: actions/cache@v4
+        with:
+          path: .cache/uptime-last-state.json
+          key: uptime-state-${{ github.repository }}-v1
+
+      - name: Check URL; Telegram only on transition (silent down, sound on recovery)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
