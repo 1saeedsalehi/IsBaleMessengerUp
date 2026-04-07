@@ -88,19 +88,16 @@ async function main() {
 
   if (currentOk) {
     if (last === "down") {
-      await sendTelegram(`✅ [بله](${CHECK_URL}) داره میبله!`, { silent: false });
+      await sendTelegram(`✅ بله دوباره داره میبله! \n ${CHECK_URL}`, { silent: false });
       console.log("Telegram recovery notification (with sound) sent.");
     } else {
       console.log("Up (no change); skipping Telegram.");
     }
     await writeLastState("up");
   } else {
-    if (last === "up") {
-      await sendTelegram(`🔴 [بله](${CHECK_URL}) داره نمیبله :(`, { silent: true });
-      console.log("Telegram down notification (silent) sent.");
-    } else {
-      console.log("Still down (no change); skipping Telegram.");
-    }
+
+    await sendTelegram(`🔴 بله هنوز داره نمیبله!`, { silent: true });
+    console.log("Telegram down notification (silent) sent.");
     await writeLastState("down");
   }
 }
