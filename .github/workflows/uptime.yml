@@ -1,11 +1,11 @@
-# Runs every 10 minutes (UTC). Add repo secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
-# Optional secrets: CHECK_URL (default https://web.bale.ai/), TIMEOUT_MS (default 90000)
-
+# Schedules only run from the DEFAULT branch (Settings → General → Default branch).
+# Fork: enable Actions on the fork (Actions tab). Public repo inactive 60d: re-enable the workflow.
+# Cron is UTC. Minute 7 past each hour avoids the worst top-of-hour queue congestion on GitHub.
 name: Bale uptime check
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "7 * * * *"
   workflow_dispatch:
 
 permissions:
