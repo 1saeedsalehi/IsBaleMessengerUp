@@ -1,0 +1,30 @@
+# Runs every 10 minutes (UTC). Add repo secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+# Optional secrets: CHECK_URL (default https://web.bale.ai/), TIMEOUT_MS (default 90000)
+
+name: Bale uptime check
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check URL and notify on success
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CHECK_URL: ${{ secrets.CHECK_URL }}
+          TIMEOUT_MS: ${{ secrets.TIMEOUT_MS }}
+        run: npm run check
