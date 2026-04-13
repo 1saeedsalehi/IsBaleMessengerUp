@@ -1,6 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+function log(...args) {
+  console.log(new Date().toISOString(), "[uptime]", ...args);
+}
+
+function logError(...args) {
+  console.error(new Date().toISOString(), "[uptime]", ...args);
+}
+
 const CHECK_URL =
   (process.env.CHECK_URL && process.env.CHECK_URL.trim()) || "https://web.bale.ai/";
 const TIMEOUT_MS = (() => {
@@ -22,24 +30,52 @@ function isSuccessStatus(status) {
 
 /** @returns {Promise<"up" | "down">} */
 async function readLastState() {
+  let raw;
   try {
-    const raw = await fs.readFile(STATE_PATH, "utf8");
-    const data = JSON.parse(raw);
-    if (data.last === "up" || data.last === "down") return data.last;
-  } catch {
-    // missing or invalid — treat as up so first run does not blast "recovered" with sound
+    raw = await fs.readFile(STATE_PATH, "utf8");
+  } catch (err) {
+    const code = err && typeof err === "object" && "code" in err ? err.code : undefined;
+    log(
+      `readLastState: no cache file at ${STATE_PATH} (${code ?? err?.message ?? err}), defaulting to "up"`
+    );
+    return "up";
   }
+
+  log(
+    `readLastState: cache raw (${STATE_PATH}, ${raw.length} chars) ${JSON.stringify(raw)}`
+  );
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (parseErr) {
+    log(
+      `readLastState: invalid JSON in cache, defaulting to "up": ${parseErr?.message ?? parseErr}`
+    );
+    return "up";
+  }
+
+  if (data.last === "up" || data.last === "down") {
+    log(`readLastState: loaded "${data.last}" from ${STATE_PATH}`);
+    return data.last;
+  }
+  log(`readLastState: invalid last field ${JSON.stringify(data)}, defaulting to "up"`);
   return "up";
 }
 
 /** @param {"up" | "down"} last */
 async function writeLastState(last) {
   await fs.mkdir(path.dirname(STATE_PATH), { recursive: true });
-  await fs.writeFile(STATE_PATH, `${JSON.stringify({ last })}\n`, "utf8");
+  const payload = `${JSON.stringify({ last })}\n`;
+  await fs.writeFile(STATE_PATH, payload, "utf8");
+  log(
+    `writeLastState: persisted (${STATE_PATH}, ${payload.length} chars) ${JSON.stringify(payload)}`
+  );
 }
 
 /** @returns {Promise<{ ok: boolean; detail: string }>} */
 async function probeUrl() {
+  log(`probeUrl: GET ${CHECK_URL} (timeout ${TIMEOUT_MS}ms)`);
   try {
     const res = await fetch(CHECK_URL, {
       method: "GET",
@@ -48,16 +84,23 @@ async function probeUrl() {
       headers: { "User-Agent": "bale-uptime-checker/1.0 (GitHub Actions)" },
     });
     const detail = `HTTP ${res.status} ${res.statusText}`;
-    if (!isSuccessStatus(res.status)) return { ok: false, detail };
+    if (!isSuccessStatus(res.status)) {
+      log(`probeUrl: failure ${detail}`);
+      return { ok: false, detail };
+    }
+    log(`probeUrl: success ${detail}`);
     return { ok: true, detail };
   } catch (err) {
-    return { ok: false, detail: String(err?.message ?? err) };
+    const detail = String(err?.message ?? err);
+    log(`probeUrl: error ${detail}`);
+    return { ok: false, detail };
   }
 }
 
 /** @param {{ silent?: boolean }} [opts] — silent: no sound (e.g. down alerts) */
 async function sendTelegram(text, opts = {}) {
   const silent = Boolean(opts.silent);
+  log(`sendTelegram: posting message (silent=${silent}, len=${text.length})`);
   const res = await fetch(
     `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
     {
@@ -73,36 +116,49 @@ async function sendTelegram(text, opts = {}) {
   );
   const body = await res.text();
   if (!res.ok) {
+    logError(`sendTelegram: API error HTTP ${res.status}: ${body}`);
     throw new Error(`Telegram API ${res.status}: ${body}`);
   }
+  log("sendTelegram: OK");
 }
 
 async function main() {
+  log(
+    `start: CHECK_URL=${CHECK_URL} TIMEOUT_MS=${TIMEOUT_MS} STATE_PATH=${STATE_PATH} TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID ? "(set)" : "(missing)"} TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN ? "(set)" : "(missing)"}`
+  );
+
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    console.error("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (e.g. GitHub Actions secrets).");
+    logError("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (e.g. GitHub Actions secrets).");
     process.exit(1);
   }
 
   const last = await readLastState();
   const { ok: currentOk, detail } = await probeUrl();
+  const current = currentOk ? "up" : "down";
+  log(`decision: last=${last} current=${current} (${detail})`);
 
   if (currentOk) {
     if (last === "down") {
+      log("notify: transition down → up (recovery, with sound)");
       await sendTelegram(`✅ بله دوباره داره میبله! \n ${CHECK_URL}`, { silent: false });
-      console.log("Telegram recovery notification (with sound) sent.");
     } else {
-      console.log("Up (no change); skipping Telegram.");
+      log("skip Telegram: still up (no state change)");
     }
     await writeLastState("up");
   } else {
-
-    await sendTelegram(`🔴 بله هنوز داره نمیبله!`, { silent: true });
-    console.log("Telegram down notification (silent) sent.");
+    if (last === "up") {
+      log("notify: transition up → down (silent alert)");
+      await sendTelegram(`🔴 بله هنوز داره نمیبله!`, { silent: true });
+    } else {
+      log("skip Telegram: still down (no state change)");
+    }
     await writeLastState("down");
   }
+
+  log("done");
 }
 
 main().catch((err) => {
-  console.error(err);
+  logError("fatal:", err);
   process.exit(1);
 });
