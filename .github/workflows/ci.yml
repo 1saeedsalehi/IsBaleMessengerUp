@@ -18,11 +18,12 @@ jobs:
         with:
           node-version: "20"
 
-      # Persists last up/down between runs so we only Telegram on state change (less noise).
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: .cache/uptime-last-state.json
-          key: uptime-state-${{ github.repository }}-v1
+          key: uptime-state-${{ github.repository }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            uptime-state-${{ github.repository }}-
 
       - name: Check URL; Telegram only on transition (silent down, sound on recovery)
         env:
@@ -31,3 +32,9 @@ jobs:
           CHECK_URL: ${{ secrets.CHECK_URL }}
           TIMEOUT_MS: ${{ secrets.TIMEOUT_MS }}
         run: npm run check
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .cache/uptime-last-state.json
+          key: uptime-state-${{ github.repository }}-${{ github.run_id }}-${{ github.run_attempt }}
